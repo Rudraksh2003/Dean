@@ -1,4 +1,4 @@
-# Dean (currently on testing so no responsiblity of this product)
+# Dean (currently on testing )
 
 Brainstorm-first design gate → lazy, minimal-diff implementation → standalone
 strict code review. One canonical rules file, generated into both a Cursor
