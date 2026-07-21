@@ -1,5 +1,5 @@
 ---
-title: Dev Workflow
+title: Dean
 description: Brainstorm-first design gate, lazy/minimal-diff implementation, and a standalone-invocable strict code review (resource, security, business-logic, and code-review-reception discipline).
 ---
 

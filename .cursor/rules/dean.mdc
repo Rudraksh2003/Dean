@@ -3,7 +3,7 @@ description: Brainstorm-first design gate, lazy/minimal-diff implementation, and
 globs: ["**/*"]
 alwaysApply: true
 ---
-# Dev Workflow (Cursor)
+# Dean (Cursor)
 
 Note: Cursor cannot hard-block tool calls. The gate below is a strong directive,
 not a technical guarantee — treat "do not implement before approval" as binding

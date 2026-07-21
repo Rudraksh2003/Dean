@@ -1,8 +1,8 @@
 ---
-name: dev-workflow
+name: dean
 description: Use before creating features, building components, or modifying behavior (design-first gate + lazy implementation); also use standalone whenever reviewing code for resource use, security, or business-logic risk.
 ---
-# Dev Workflow
+# Dean
 
 ## Phase 1 — Brainstorm Before You Build
 

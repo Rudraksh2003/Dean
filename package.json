@@ -1,0 +1,23 @@
+{
+  "name": "dean",
+  "version": "0.1.0",
+  "description": "Brainstorm-first design gate, lazy/minimal-diff implementation, and a standalone strict code review — one source, generated into a Cursor rule and a Claude Code skill.",
+  "license": "MIT",
+  "main": "generate.js",
+  "bin": {
+    "dean": "./generate.js"
+  },
+  "files": [
+    "RULES.md",
+    "generate.js",
+    "build"
+  ],
+  "scripts": {
+    "generate": "node generate.js",
+    "check": "node generate.js --check",
+    "test": "node test.js"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}
