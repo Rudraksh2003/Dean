@@ -6,6 +6,7 @@ implementation → standalone strict code review. One canonical source
 <p align="center">
   <img src="Dean/Dean/Dean.png" alt="Dean Banner" width="400">
 </p>
+
 ## Install
 
 **Cursor:** copy `build/.cursor/rules/dean.mdc` into your repo's `.cursor/rules/`.
