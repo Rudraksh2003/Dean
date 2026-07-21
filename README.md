@@ -1,7 +1,5 @@
-# Dean
-<p align="center">
-  <img src="Dean/Dean/Dean.png" alt="Dean Banner" width="400">
-</p>
+# Dean (currently on testing so no responsiblity of this product)
+
 Brainstorm-first design gate → lazy, minimal-diff implementation → standalone
 strict code review. One canonical rules file, generated into both a Cursor
 rule and a Claude Code skill, so you write the rules once and get both.
