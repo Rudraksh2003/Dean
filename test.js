@@ -139,6 +139,7 @@ test("INTEGRATION: CLI --check exits 0 on the real file", () => {
 });
 
 test("INTEGRATION: CLI fails loudly (non-zero exit) on a broken file", () => {
+  console.log("     --- expected failure below: this test intentionally breaks the input ---");
   const tmp = path.join(require("os").tmpdir(), `dean-broken-${Date.now()}.md`);
   fs.writeFileSync(tmp, minimalSource().replace("<!-- /BLOCK -->\n\n<!-- BLOCK:PONYTAIL -->", ""));
   let threw = false;
