@@ -1,5 +1,5 @@
 # Dean (currently on testing )
-
+# Dean improving day by day
 Brainstorm-first design gate → lazy, minimal-diff implementation → standalone
 strict code review. One canonical rules file, generated into both a Cursor
 rule and a Claude Code skill, so you write the rules once and get both.
