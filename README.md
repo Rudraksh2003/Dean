@@ -4,7 +4,7 @@ A dev-workflow plugin: brainstorm-first design gate → lazy/minimal-diff
 implementation → standalone strict code review. One canonical source
 (`RULES.md`), generated into both a Cursor rule and a Claude Code skill.
 <p align="center">
-  <img src="Dean/Dean/Dean.png" alt="Dean Banner" width="900">
+  <img src="Dean/Dean/Dean.png" alt="Dean Banner" width="400">
 </p>
 ## Install
 
