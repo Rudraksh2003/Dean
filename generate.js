@@ -16,10 +16,15 @@ const BLOCK_NAMES = ["BRAINSTORM", "PONYTAIL", "REVIEW", "REVIEW_STANDALONE_NOTE
 // so they're unit-testable in isolation from test.js. Only main() exits.
 
 function parseSource(rawInput) {
+  // Strip a UTF-8 BOM if present. Notepad and some Windows tooling default to
+  // writing one; without stripping it, the frontmatter regex below never
+  // matches because the file doesn't start with a literal "---".
+  let raw = rawInput.charCodeAt(0) === 0xfeff ? rawInput.slice(1) : rawInput;
+
   // Normalize CRLF -> LF first. Without this, files saved on Windows (or
   // checked out with core.autocrlf) fail every regex below, because "\n---\n"
   // never appears verbatim in a CRLF file (it's "\r\n---\r\n" instead).
-  const raw = rawInput.replace(/\r\n/g, "\n");
+  raw = raw.replace(/\r\n/g, "\n");
 
   // Bound the frontmatter search to the text before the first block marker.
   // This guarantees a "---" divider anywhere inside a block's body content
@@ -42,9 +47,16 @@ function parseSource(rawInput) {
 
   const blocks = {};
   for (const name of BLOCK_NAMES) {
+    // Markers must occupy their own line (only whitespace besides the marker
+    // itself). This means mentioning the marker syntax inline inside a
+    // sentence -- e.g. documenting how Dean's own format works -- is treated
+    // as ordinary prose, not a real marker, because it shares a line with
+    // other text. A marker written alone on its own line, even as a
+    // documentation example, is indistinguishable from a real one; that's a
+    // known limitation, not silently mishandled (see README).
     const re = new RegExp(
-      `<!--\\s*BLOCK:${name}\\s*-->([\\s\\S]*?)<!--\\s*/BLOCK\\s*-->`,
-      "g"
+      `^[ \\t]*<!--\\s*BLOCK:${name}\\s*-->[ \\t]*$\\n([\\s\\S]*?)\\n^[ \\t]*<!--\\s*/BLOCK\\s*-->[ \\t]*$`,
+      "gm"
     );
     const matches = [...raw.matchAll(re)];
     if (matches.length === 0) throw new Error(`missing block: ${name}`);

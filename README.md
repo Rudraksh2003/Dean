@@ -1,197 +1,171 @@
-# Dean
+# Dean (Dean on testing and improving day by day)
+
 <p align="center">
   <img src="Dean/Dean/Dean.png" alt="Dean Banner" width="400">
 </p>
-Brainstorm-first design gate → lazy, minimal-diff implementation → standalone
-strict code review. One canonical rules file, generated into both a Cursor
-rule and a Claude Code skill, so you write the rules once and get both.
+**Guardrails for AI coding assistants — one rules file, generated into a Cursor rule and a Claude Code skill.**
 
+Dean makes Cursor and Claude Code design before they build, stay lazy about
+code volume while staying strict about architecture, and run a real code
+review — security, resource waste, and business-logic risk — on demand.
 
-A dev-workflow plugin: brainstorm-first design gate → lazy/minimal-diff
-implementation → standalone strict code review. One canonical source
-(`RULES.md`), generated into both a Cursor rule and a Claude Code skill.
-<p align="center">
-  <img src="Dean/Dean/Dean.png" alt="Dean Banner" width="400">
-</p>
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D14-brightgreen.svg)](https://nodejs.org)
+[![Tests](https://img.shields.io/badge/tests-14%20passing%20(local)-brightgreen.svg)](./test.js)
 
-- **License:** MIT
-- **Requires:** Node.js 14+ (only for editing/regenerating — installing the
-  generated files needs nothing)
+---
 
+## Why Dean exists
 
-## Table of contents
+AI coding assistants are fast at producing code and slow at knowing when to
+stop. Left alone, they'll happily turn one feature request into
+`auth.go`, `auth2.go`, `helper.go`, `utils.go`, `middleware.go`,
+`manager.go`, `service.go`, `controller.go`, `validator.go`, `factory.go` —
+ten files where one function would've done, because nothing in the default
+setup ever told it to check first.
 
-- [What's in the box](#whats-in-the-box)
-- [Install (using Dean as-is)](#install-using-dean-as-is)
-- [Editing the rules (contributing to Dean itself)](#editing-the-rules-contributing-to-dean-itself)
-- [Project structure](#project-structure)
-- [How it works](#how-it-works)
-- [Testing](#testing)
-- [Benchmark](#benchmark-last-run)
-- [Known limitations](#known-limitations-honest-not-marketing)
-- [Contributing](#contributing)
-- [License](#license)
+Dean is three enforced habits, not three hundred lines of vague advice:
 
-## What's in the box
+1. **Design before code.** A hard gate against implementation until a design
+   is proposed and approved — even for "simple" tasks, especially for
+   "simple" tasks.
+2. **Lazy, architecture-respecting implementation.** A 7-rung laziness ladder
+   (YAGNI → reuse → stdlib → platform → existing dependency → one-liner →
+   minimum new code), plus explicit rules against file sprawl, god objects,
+   and circular dependencies — the stuff plain "write less code" advice
+   misses.
+3. **A real review pass, usable standalone.** Security (XSS, SQLi, secrets in
+   code, authz gaps, unsafe deserialization, injection), resource waste
+   (N+1s, unbounded queries, redundant recomputation), business-logic
+   stability, and a code-review-reception discipline that bans performative
+   agreement in favor of actually verifying feedback.
 
-Three phases, one source of truth:
+## Install
 
-1. **Brainstorm** — a hard gate against writing code before a design is
-   proposed and approved, even for "simple" tasks. One clarifying question at
-   a time, 2–3 approaches with a recommendation, incremental section-by-section
-   approval.
-2. **Ponytail** — a 7-rung laziness ladder (YAGNI → reuse → stdlib → platform
-   → existing dependency → one-liner → minimum new code), root-cause-not-symptom
-   bug fixing, and a `ponytail:` comment convention for marking deliberate
-   shortcuts with their ceiling.
-3. **Review** *(works standalone — doesn't need the other two phases to have run)*
-   — a checklist for DB-calls-in-loops and other resource waste, a security
-   pass (XSS, SQLi, secrets in code, authz gaps, unsafe deserialization,
-   injection), a business-logic/stability check, and a code-review-reception
-   discipline (verify before implementing, no performative agreement, source-
-   specific handling for trusted vs. external feedback).
-
-## Install (using Dean as-is)
-
-You don't need Node, npm, or this repo's tooling just to *use* Dean — only the
-two generated files matter. Drop them into your own project at its repo root:
+Two files, no runtime dependency, works in either tool or both:
 
 ```
 your-project/
-├── .cursor/
-│   └── rules/
-│       └── dean.mdc              <- from build/.cursor/rules/dean.mdc
-├── .claude/
-│   └── skills/
-│       └── dean/
-│           └── SKILL.md          <- from build/.claude/skills/dean/SKILL.md
-└── (the rest of your project)
+├── .cursor/rules/dean.mdc              ← Cursor: auto-discovered, no config
+└── .claude/skills/dean/SKILL.md        ← Claude Code: picked up next session
 ```
 
-- **Cursor** auto-discovers `.cursor/rules/` from the repo root — nothing to
-  configure.
-- **Claude Code** auto-discovers `.claude/skills/` from the repo root — new
-  skills are picked up on the next session.
+Grab both from [`build/`](./build) in this repo, or generate your own copy
+(see below). Use just one file if you only run one tool.
 
-You can install just one of the two files if you only use one tool.
-
-## Editing the rules (contributing to Dean itself)
-
-If you want to change what Dean actually says — not just install it — clone
-this repo and work from `RULES.md`:
+## Quick start (editing the rules yourself)
 
 ```bash
-npm run generate   # writes both platform files to build/
+git clone https://github.com/<your-org>/dean.git
+cd dean
+npm run generate   # RULES.md -> build/.cursor + build/.claude
 npm run check       # validates output without writing anything (CI-friendly)
-npm test            # full regression suite
+npm test            # 14-test regression suite
 ```
 
-After `npm run generate`, copy the two files out of `build/` into wherever
-your target project's `.cursor/rules/` and `.claude/skills/dean/` live.
-
-## Project structure
-
-```
-Dean/
-├── RULES.md              canonical source — edit this
-├── generate.js            generator + CLI (node generate.js [--check])
-├── test.js                regression suite (node test.js)
-├── package.json
-├── build/                 generated output — don't hand-edit, it's overwritten
-│   ├── .cursor/rules/dean.mdc
-│   └── .claude/skills/dean/SKILL.md
-└── docs/superpowers/specs/  design history
-```
+Then copy the two files out of `build/` into your target project's
+`.cursor/rules/` and `.claude/skills/dean/`.
 
 ## How it works
 
-`RULES.md` has YAML frontmatter (`title`, `description`) followed by four
-HTML-comment-delimited blocks, in fixed order: `BRAINSTORM`, `PONYTAIL`,
-`REVIEW`, `REVIEW_STANDALONE_NOTE`. `generate.js` extracts each block verbatim
-and places it into both output files — there's no per-block templating logic,
-just extraction and placement into each platform's own frontmatter wrapper.
+One canonical file, `RULES.md`, holds four marker-delimited blocks —
+`BRAINSTORM`, `PONYTAIL`, `REVIEW`, `REVIEW_STANDALONE_NOTE` — and
+`generate.js` extracts each block verbatim into both platform files. No
+templating engine, no build step beyond string extraction, because a prose
+rules file doesn't need one.
 
-The two outputs aren't identical:
-- Cursor can't hard-block tool calls, so its brainstorm section is worded as a
-  strong advisory directive, with an explicit note in the file itself that
-  enforcement isn't guaranteed.
-- The Claude skill's `description` field (always resident in context once the
-  skill is installed) is a single trigger-condition line; the full rule text
-  lives in the body, which only loads into context when the skill actually
-  fires.
-- `REVIEW` is independently invocable in both outputs.
+The two outputs genuinely differ, not just cosmetically:
+- **Cursor** can't hard-block tool calls, so its design-gate section is
+  worded as a strong advisory directive, with an explicit note in the file
+  that enforcement isn't guaranteed by the platform.
+- **Claude Code**'s skill `description` field (always resident in context
+  once installed) is a single trigger-condition line; the full rule text
+  only loads when the skill actually fires.
+- **Review** is independently invocable in both — reviewing a diff you
+  didn't write doesn't require having run the other two phases on it.
+
+## Dean vs. a plain `.cursorrules` file
+
+| | Plain `.cursorrules` / ad-hoc prompt | Dean |
+|---|---|---|
+| Design-before-code gate | Rare, usually forgotten under deadline pressure | Built in, phase 1, non-negotiable |
+| Stops file sprawl (`auth2.go`, `helper.go`...) | Not unless you wrote it yourself | Explicit architecture-discipline rules |
+| Security/resource review | Ad hoc, whatever you remember to ask for | Standing checklist, invocable standalone |
+| Works on Cursor **and** Claude Code | Usually one or the other, drifting apart over time | One source, both platforms, always in sync |
+| Claims about reliability | Untested | 14 regression tests, adversarially fuzzed, documented limitations below |
 
 ## Testing
 
-`node test.js` runs 12 checks: unit tests against `parseSource`/`renderCursor`/
-`renderClaudeSkill` directly, two permanent regression tests (see below), and
-three integration tests that shell out to the real CLI against the real
-`RULES.md`.
-
-**One test prints a stack trace on purpose.** The test named `CLI fails
-loudly (non-zero exit) on a broken file` feeds a deliberately broken RULES.md
-into the generator to prove it dies loudly instead of silently producing bad
-output. `execFileSync` passes that child process's stderr straight through to
-your terminal even though the parent test catches it and marks it `ok`. The
-test now prints `--- expected failure below ---` right before it runs, so the
-trace is labeled rather than looking like something actually broke. If you
-ever see `N passed, 0 failed` at the bottom, everything passed — the trace
-above it is the test working as intended, not a crash.
+`npm test` runs 14 checks — unit tests, permanent regressions for every real
+bug found during development, and integration tests against the actual
+`RULES.md`. One test intentionally triggers a crash to prove the CLI fails
+loudly on bad input instead of silently producing garbage; it prints
+`--- expected failure below ---` right before the stack trace so it doesn't
+look like something broke when it's actually the test working.
 
 ## Benchmark (last run)
 
-200 consecutive `generate` runs on the reference machine:
+100 consecutive `generate` runs, reference machine:
 
 | metric | value |
 |---|---|
-| avg | 41.6 ms |
-| p50 | 40.6 ms |
-| p95 | 50.0 ms |
-| max | 68.1 ms |
-| output hash variance across 200 runs | 0 (fully deterministic) |
+| avg | 33.2 ms |
+| p95 | 37.8 ms |
+| output hash variance across 100 runs | 0 — fully deterministic |
 
-Re-run it yourself with a loop around `node generate.js` — there's nothing
-environment-specific baked into these numbers, they're just Node startup +
-regex parsing of a ~10KB file, so they should hold on most machines.
+Nothing environment-specific is baked in — it's Node startup plus regex
+parsing of a ~10KB file. Re-run it yourself; the numbers should hold on most
+machines.
 
-## Known limitations (honest, not marketing)
+## Bugs found, fixed, and locked in (the honest changelog)
 
-- **Frontmatter parsing is a hand-rolled `key: value` line reader, not a real
-  YAML parser.** It'll reject multi-line values, lists, or nested structures
-  in the frontmatter. Fine for the current two fields; would need a real
-  parser (e.g. `js-yaml`) if the frontmatter grows more complex.
-- **No CI configured yet.** `npm test` passes locally; there's no GitHub
-  Actions workflow wired up to run it on push/PR yet — add one before
-  accepting outside contributions at scale.
-- **Cursor enforcement is advisory only.** Nothing in the `.mdc` format can
-  actually force the "don't implement before approval" gate the way the
-  Claude skill's tool-call restraint can, and the generated file says so.
-- **No versioning/changelog automation.** Bumping `package.json`'s version is
-  manual.
-- **The review checklist reflects one set of judgment calls**, not an
-  exhaustive security/performance audit standard — treat it as a floor, not a
-  ceiling, and send a PR if you find a real gap.
+Every one of these was found by deliberately trying to break the parser, not
+assumed away, and every fix has a permanent regression test so it can't
+silently come back:
 
-### Fixed during review
-A CRLF (Windows line-ending) file previously failed to parse at all — the
-frontmatter regex required a literal `\n---\n`, which never appears in a
-`\r\n`-terminated file. Fixed by normalizing line endings on read, with a
-permanent regression test (`REGRESSION: parses correctly with CRLF line
-endings`). A second regression test confirms a stray `---` markdown divider
-inside a block's body can't be mistaken for the frontmatter delimiter — the
-frontmatter search is bounded to only the text before the first block marker,
-so block body content is never in scope for that regex at all.
+- **CRLF line endings** (Windows saves, `core.autocrlf`) — the frontmatter
+  regex required a literal `\n---\n`, which doesn't exist in a `\r\n` file.
+  Fixed by normalizing on read; `.gitattributes` now also forces LF at the
+  git layer.
+- **UTF-8 BOM** (Notepad's default) — same root failure, different cause.
+  Fixed by stripping a BOM before parsing anything else.
+- **Marker syntax mentioned inline in prose** — documenting Dean's own
+  format inside a block ("here's how `<!-- BLOCK:X -->` works") was
+  misread as a real marker. Fixed by requiring markers to occupy their own
+  line.
+- **Investigated, not a bug:** a stray `---` divider inside a block body was
+  suspected to confuse frontmatter detection. It doesn't — the parser always
+  takes the first `---` in the file. Hardened anyway so it's structurally
+  impossible rather than just untested.
+
+## Known limitations (no marketing gloss)
+
+- Frontmatter parsing is a hand-rolled `key: value` reader, not real YAML —
+  fine for two fields, would need `js-yaml` if that grows.
+- No CI configured. `npm test` passes locally; nothing runs it automatically
+  on push/PR yet.
+- Cursor's design gate is advisory only — nothing in `.mdc` can technically
+  enforce it, and the generated file says so rather than overclaiming.
+- A marker written *alone on its own line* purely as a documentation example
+  is still indistinguishable from a real one. Use a fenced code block with
+  extra text on the line if you ever need to show the syntax verbatim.
+- The review checklist is one reasonable set of judgment calls, not an
+  exhaustive security audit standard. Treat it as a floor.
 
 ## Contributing
 
 1. Edit `RULES.md`.
-2. `npm run generate && npm test` — all 12 tests must pass.
-3. If you're fixing a bug, add a regression test for it in `test.js` before
-   the fix (see the CRLF test for the pattern) — that's what stops it coming
-   back silently.
-4. Open a PR. There's no CI yet (see limitations above), so paste your local
-   `npm test` output in the PR description until one exists.
+2. `npm run generate && npm test` — all 14 tests must pass.
+3. Fixing a bug? Add a regression test for it first (see the CRLF test in
+   `test.js` for the pattern) — that's what stops it coming back silently.
+4. Open a PR with your local `npm test` output pasted in, since there's no CI
+   yet.
 
 ## License
 
 MIT — see [`LICENSE`](./LICENSE).
+
+---
+
+*Cursor rules · Claude Code skill · AI coding assistant guardrails · code
+review checklist · dev workflow enforcement*

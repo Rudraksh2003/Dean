@@ -104,6 +104,26 @@ test("REGRESSION: a stray '---' divider inside a block body doesn't break frontm
   assert.ok(blocks.PONYTAIL.includes("More text after a divider."));
 });
 
+// Regression test: mentioning the marker syntax inline in prose (e.g.
+// documenting Dean's own format) must not be mistaken for a real marker.
+// Found during adversarial testing: a marker sharing a line with other text
+// is not a marker.
+test("REGRESSION: mentioning marker syntax inline in prose doesn't break parsing", () => {
+  const src = minimalSource({
+    brainstorm: "Here's how markers work: `<!-- BLOCK:PONYTAIL --> ... <!-- /BLOCK -->` is the syntax.",
+  });
+  const { blocks } = parseSource(src);
+  assert.ok(blocks.BRAINSTORM.includes("is the syntax."));
+});
+
+// Regression test: a UTF-8 BOM (default in Notepad and some Windows tooling)
+// must not break frontmatter detection.
+test("REGRESSION: parses correctly with a UTF-8 BOM prefix", () => {
+  const src = "\uFEFF" + minimalSource();
+  const { fm } = parseSource(src);
+  assert.strictEqual(fm.title, "Dean");
+});
+
 test("rendered outputs carry no leaked BLOCK markers and pass validateOutput", () => {
   const { fm, blocks } = parseSource(minimalSource());
   const cursor = renderCursor(fm, blocks);

@@ -107,8 +107,45 @@ Understanding the problem (read it fully and trace the real flow before picking
 a rung — a small diff you don't understand is laziness dressed up as
 efficiency), input validation at trust boundaries, error handling that prevents
 data loss, security, accessibility, the calibration real hardware needs (the
-platform is never the spec ideal — a clock drifts, a sensor reads off), and
-anything explicitly requested.
+platform is never the spec ideal — a clock drifts, a sensor reads off),
+respecting existing architecture, and anything explicitly requested.
+
+### Respect the architecture
+Laziness about code volume does not mean laziness about structure. Fewer lines
+in the wrong place is still a mess. Before creating a new file, check:
+- Does an existing file or module already own this responsibility? Extend it
+  there instead of creating a sibling. `auth.go` growing a second file called
+  `auth2.go`, `helper.go`, or `utils.go` because the first file got long is a
+  smell, not a pattern — it means the split needs a real seam, not a
+  same-named overflow file.
+- Would this file introduce a circular dependency? Trace the import graph one
+  level before adding the file, not after you've already written it.
+- Is this becoming a god object? A single file or struct doing scheduling,
+  validation, persistence, and transport all at once isn't "one clear
+  purpose" — split along an existing seam in the codebase, not a seam invented
+  on the spot for this one change.
+- A new file's name must state one responsibility. A generic role word as the
+  only qualifier (`manager`, `service`, `factory`, `handler`, `controller`)
+  with nothing distinguishing it from siblings using the same word is a sign
+  the split wasn't actually thought through.
+- When a task can be done by adding a few lines to an existing file versus
+  creating a new file to hold those same few lines "cleanly," the existing
+  file wins — unless it's already oversized for a separate, unrelated reason.
+- One feature request should not produce a trail of ten same-purpose files
+  (`auth.go`, `auth2.go`, `helper.go`, `utils.go`, `middleware.go`,
+  `manager.go`, `service.go`, `controller.go`, `validator.go`, `factory.go`).
+  If a design is heading there, stop and ask whether the architecture itself
+  needs a decision, not another file.
+
+### Token discipline
+- Don't re-paste unchanged code. Edit only the lines that change instead of
+  regenerating a whole file when a targeted diff does the job.
+- Don't re-read a file already visible in context. Re-fetching something
+  already shown spends tokens for information already available.
+- Batch related edits into one pass over a file instead of separate round
+  trips per line or per small change.
+- Verbosity is not thoroughness. A shorter correct answer beats a longer one
+  that says the same thing twice.
 
 ### Leave a check behind
 Non-trivial logic leaves one runnable check behind: the smallest thing that
@@ -132,6 +169,10 @@ or ponytail phases on it first.
   data can grow without bound.
 - Reuse check: does this duplicate a helper, util, or pattern that already
   exists in the codebase? If so, that's the fix, not new code.
+- File/module sprawl: near-duplicate files following an `x.go`/`x2.go`/
+  `helper.go`/`utils.go` pattern, god objects holding more than one clear
+  responsibility, or a circular dependency introduced by this change — flag
+  and consolidate along an existing seam rather than approving as-is.
 
 ### Security checklist
 - XSS: unescaped user input rendered into HTML/DOM, `innerHTML` with untrusted
