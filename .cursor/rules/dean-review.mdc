@@ -1,0 +1,98 @@
+---
+description: "Strict code review: security (XSS/SQLi/secrets/authz), resource use (N+1, sprawl, god objects), business-logic risk, and code-review-reception discipline. Use when reviewing a diff, PR, or file — does not require the design or implementation phases to have run first."
+alwaysApply: false
+---
+# Dean — Review (Cursor, Agent Requested)
+
+## Phase 3 — Strict Review (standalone-invocable)
+
+This phase can be invoked on its own, any time, independent of the other two
+phases — reviewing someone else's diff doesn't require having run the brainstorm
+or ponytail phases on it first.
+
+### Resource / performance checklist
+- Database or network calls inside a loop (classic N+1) — flag and collapse to
+  a batch call.
+- Redundant recomputation — the same expensive result computed more than once
+  per request/cycle when it could be cached or hoisted out of a loop.
+- Unbounded result sets — a query or fetch with no limit/pagination where the
+  data can grow without bound.
+- Reuse check: does this duplicate a helper, util, or pattern that already
+  exists in the codebase? If so, that's the fix, not new code.
+- File/module sprawl: near-duplicate files following an `x.go`/`x2.go`/
+  `helper.go`/`utils.go` pattern, god objects holding more than one clear
+  responsibility, or a circular dependency introduced by this change — flag
+  and consolidate along an existing seam rather than approving as-is.
+
+### Security checklist
+- XSS: unescaped user input rendered into HTML/DOM, `innerHTML` with untrusted
+  data, missing output encoding.
+- SQL injection: string-concatenated queries with user input instead of
+  parameterized queries/prepared statements.
+- Secrets in code: API keys, passwords, tokens committed or hardcoded instead
+  of pulled from config/secret storage.
+- AuthZ/authN gaps: endpoints or actions missing an ownership/permission check,
+  trusting client-supplied identifiers without server-side verification.
+- Unsafe deserialization: deserializing untrusted input into types/objects
+  that can execute code or bypass validation.
+- Command/path injection: untrusted input reaching a shell call, file path, or
+  dynamic `require`/`import` without sanitization.
+
+### Business-logic and stability checklist
+- Does this change silently alter existing behavior beyond what was asked for?
+- Is everything left in a working, runnable state — no half-applied edits, no
+  broken imports, no dangling references?
+- No malicious code: no exfiltration, no backdoors, no obfuscated behavior that
+  doesn't match what the diff claims to do.
+- Business rules (pricing, permissions, state transitions, invariants) stay
+  intact unless the change explicitly targets them.
+
+### Code-review-reception discipline
+Verify before implementing. Ask before assuming. Technical correctness over
+social comfort.
+
+**Response pattern:** read the full feedback without reacting → restate the
+requirement in your own words (or ask) → verify against the actual codebase →
+evaluate whether it's technically sound for this codebase → respond with a
+technical acknowledgment or reasoned pushback → implement one item at a time,
+testing each.
+
+**Forbidden responses:** "You're absolutely right!", "Great point!", "Thanks for
+catching that" — any performative agreement or gratitude expression in place of
+a substantive fix. State the fix instead; the code shows you heard it.
+
+**Unclear feedback:** if any item in a batch of feedback is unclear, stop and
+ask about the unclear items before implementing any of them — items may be
+related, and partial understanding produces a wrong implementation. Don't
+implement the clear ones now and ask about the rest later.
+
+**Source-specific handling:**
+- Trusted collaborator: implement after understanding, still ask if scope is
+  unclear, no performative agreement, skip straight to action or a plain
+  technical acknowledgment.
+- External reviewer: before implementing, check whether the suggestion is
+  technically correct for this codebase, whether it breaks existing
+  functionality, whether there's a reason the current implementation exists,
+  and whether it works across all relevant platforms/versions. If it seems
+  wrong, push back with technical reasoning. If it can't be easily verified,
+  say so and ask how to proceed rather than guessing.
+
+**YAGNI check on "do it properly" suggestions:** grep the codebase for actual
+usage before adding requested robustness. If the thing is unused, propose
+removing it instead of hardening it. If it's used, then implement properly.
+
+**Implementation order for multi-item feedback:** clarify anything unclear
+first, then blocking issues (breaks, security) before simple fixes (typos,
+imports) before complex fixes (refactoring, logic). Test each fix individually
+and verify no regressions before moving to the next.
+
+**Acknowledging correct feedback:** "Fixed. [what changed]" or "Good catch —
+[issue]. Fixed in [location]." Never "You're absolutely right" or unearned
+thanks.
+
+**If pushback turns out wrong:** state the correction factually — "Verified
+this and you're correct; my initial understanding was wrong because [reason].
+Fixing." No long apology, no defending the original pushback.
+
+Phase 3 (Strict Review) does not require Phase 1 or Phase 2 to have run first.
+It can be invoked directly on any existing diff, PR, or file.

@@ -1,13 +1,13 @@
 ---
-description: Brainstorm-first design gate, lazy/minimal-diff implementation, and a standalone-invocable strict code review (resource, security, business-logic, and code-review-reception discipline).
-globs: ["**/*"]
+description: "Design-first gate before building features, plus lazy/minimal-diff implementation discipline (architecture and token discipline included). Always applies."
 alwaysApply: true
 ---
-# Dean (Cursor)
+# Dean — Core (Cursor, Always Apply)
 
 Note: Cursor cannot hard-block tool calls. The gate below is a strong directive,
 not a technical guarantee — treat "do not implement before approval" as binding
-even though nothing here can force it.
+prompt pressure the model is expected to follow, not something this file can
+enforce mechanically.
 
 ## Phase 1 — Brainstorm Before You Build
 
@@ -110,99 +110,47 @@ Understanding the problem (read it fully and trace the real flow before picking
 a rung — a small diff you don't understand is laziness dressed up as
 efficiency), input validation at trust boundaries, error handling that prevents
 data loss, security, accessibility, the calibration real hardware needs (the
-platform is never the spec ideal — a clock drifts, a sensor reads off), and
-anything explicitly requested.
+platform is never the spec ideal — a clock drifts, a sensor reads off),
+respecting existing architecture, and anything explicitly requested.
+
+### Respect the architecture
+Laziness about code volume does not mean laziness about structure. Fewer lines
+in the wrong place is still a mess. Before creating a new file, check:
+- Does an existing file or module already own this responsibility? Extend it
+  there instead of creating a sibling. `auth.go` growing a second file called
+  `auth2.go`, `helper.go`, or `utils.go` because the first file got long is a
+  smell, not a pattern — it means the split needs a real seam, not a
+  same-named overflow file.
+- Would this file introduce a circular dependency? Trace the import graph one
+  level before adding the file, not after you've already written it.
+- Is this becoming a god object? A single file or struct doing scheduling,
+  validation, persistence, and transport all at once isn't "one clear
+  purpose" — split along an existing seam in the codebase, not a seam invented
+  on the spot for this one change.
+- A new file's name must state one responsibility. A generic role word as the
+  only qualifier (`manager`, `service`, `factory`, `handler`, `controller`)
+  with nothing distinguishing it from siblings using the same word is a sign
+  the split wasn't actually thought through.
+- When a task can be done by adding a few lines to an existing file versus
+  creating a new file to hold those same few lines "cleanly," the existing
+  file wins — unless it's already oversized for a separate, unrelated reason.
+- One feature request should not produce a trail of ten same-purpose files
+  (`auth.go`, `auth2.go`, `helper.go`, `utils.go`, `middleware.go`,
+  `manager.go`, `service.go`, `controller.go`, `validator.go`, `factory.go`).
+  If a design is heading there, stop and ask whether the architecture itself
+  needs a decision, not another file.
+
+### Token discipline
+- Don't re-paste unchanged code. Edit only the lines that change instead of
+  regenerating a whole file when a targeted diff does the job.
+- Don't re-read a file already visible in context. Re-fetching something
+  already shown spends tokens for information already available.
+- Batch related edits into one pass over a file instead of separate round
+  trips per line or per small change.
+- Verbosity is not thoroughness. A shorter correct answer beats a longer one
+  that says the same thing twice.
 
 ### Leave a check behind
 Non-trivial logic leaves one runnable check behind: the smallest thing that
 fails if the logic breaks — an assert-based demo/self-check, or one small test
 file. No frameworks, no fixtures. Trivial one-liners need no test.
-
-## Phase 3 — Strict Review (standalone-invocable)
-
-This phase can be invoked on its own, any time, independent of the other two
-phases — reviewing someone else's diff doesn't require having run the brainstorm
-or ponytail phases on it first.
-
-### Resource / performance checklist
-- Database or network calls inside a loop (classic N+1) — flag and collapse to
-  a batch call.
-- Redundant recomputation — the same expensive result computed more than once
-  per request/cycle when it could be cached or hoisted out of a loop.
-- Unbounded result sets — a query or fetch with no limit/pagination where the
-  data can grow without bound.
-- Reuse check: does this duplicate a helper, util, or pattern that already
-  exists in the codebase? If so, that's the fix, not new code.
-
-### Security checklist
-- XSS: unescaped user input rendered into HTML/DOM, `innerHTML` with untrusted
-  data, missing output encoding.
-- SQL injection: string-concatenated queries with user input instead of
-  parameterized queries/prepared statements.
-- Secrets in code: API keys, passwords, tokens committed or hardcoded instead
-  of pulled from config/secret storage.
-- AuthZ/authN gaps: endpoints or actions missing an ownership/permission check,
-  trusting client-supplied identifiers without server-side verification.
-- Unsafe deserialization: deserializing untrusted input into types/objects
-  that can execute code or bypass validation.
-- Command/path injection: untrusted input reaching a shell call, file path, or
-  dynamic `require`/`import` without sanitization.
-
-### Business-logic and stability checklist
-- Does this change silently alter existing behavior beyond what was asked for?
-- Is everything left in a working, runnable state — no half-applied edits, no
-  broken imports, no dangling references?
-- No malicious code: no exfiltration, no backdoors, no obfuscated behavior that
-  doesn't match what the diff claims to do.
-- Business rules (pricing, permissions, state transitions, invariants) stay
-  intact unless the change explicitly targets them.
-
-### Code-review-reception discipline
-Verify before implementing. Ask before assuming. Technical correctness over
-social comfort.
-
-**Response pattern:** read the full feedback without reacting → restate the
-requirement in your own words (or ask) → verify against the actual codebase →
-evaluate whether it's technically sound for this codebase → respond with a
-technical acknowledgment or reasoned pushback → implement one item at a time,
-testing each.
-
-**Forbidden responses:** "You're absolutely right!", "Great point!", "Thanks for
-catching that" — any performative agreement or gratitude expression in place of
-a substantive fix. State the fix instead; the code shows you heard it.
-
-**Unclear feedback:** if any item in a batch of feedback is unclear, stop and
-ask about the unclear items before implementing any of them — items may be
-related, and partial understanding produces a wrong implementation. Don't
-implement the clear ones now and ask about the rest later.
-
-**Source-specific handling:**
-- Trusted collaborator: implement after understanding, still ask if scope is
-  unclear, no performative agreement, skip straight to action or a plain
-  technical acknowledgment.
-- External reviewer: before implementing, check whether the suggestion is
-  technically correct for this codebase, whether it breaks existing
-  functionality, whether there's a reason the current implementation exists,
-  and whether it works across all relevant platforms/versions. If it seems
-  wrong, push back with technical reasoning. If it can't be easily verified,
-  say so and ask how to proceed rather than guessing.
-
-**YAGNI check on "do it properly" suggestions:** grep the codebase for actual
-usage before adding requested robustness. If the thing is unused, propose
-removing it instead of hardening it. If it's used, then implement properly.
-
-**Implementation order for multi-item feedback:** clarify anything unclear
-first, then blocking issues (breaks, security) before simple fixes (typos,
-imports) before complex fixes (refactoring, logic). Test each fix individually
-and verify no regressions before moving to the next.
-
-**Acknowledging correct feedback:** "Fixed. [what changed]" or "Good catch —
-[issue]. Fixed in [location]." Never "You're absolutely right" or unearned
-thanks.
-
-**If pushback turns out wrong:** state the correction factually — "Verified
-this and you're correct; my initial understanding was wrong because [reason].
-Fixing." No long apology, no defending the original pushback.
-
-Phase 3 (Strict Review) does not require Phase 1 or Phase 2 to have run first.
-It can be invoked directly on any existing diff, PR, or file.

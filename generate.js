@@ -1,19 +1,28 @@
 #!/usr/bin/env node
-// Dean: generates the Cursor rules file and Claude skill from RULES.md.
+// Dean: generates Cursor rules and a Claude skill from RULES.md.
 // Usage: node generate.js [--check]
+// Env: DEAN_RULES_PATH overrides the source file (used by test.js for CLI integration tests).
 "use strict";
 
 const fs = require("fs");
 const path = require("path");
 
-const SRC = path.join(__dirname, "RULES.md");
-const CURSOR_OUT = path.join(__dirname, "build/.cursor/rules/dean.mdc");
+const SRC = process.env.DEAN_RULES_PATH || path.join(__dirname, "RULES.md");
+const CURSOR_CORE_OUT = path.join(__dirname, "build/.cursor/rules/dean-core.mdc");
+const CURSOR_REVIEW_OUT = path.join(__dirname, "build/.cursor/rules/dean-review.mdc");
 const CLAUDE_OUT = path.join(__dirname, "build/.claude/skills/dean/SKILL.md");
 
 const BLOCK_NAMES = ["BRAINSTORM", "PONYTAIL", "REVIEW", "REVIEW_STANDALONE_NOTE"];
 
-// parseSource/renderCursor/renderClaudeSkill throw on error (not process.exit),
-// so they're unit-testable in isolation from test.js. Only main() exits.
+// parseSource/render*/validateOutput throw on error (not process.exit), so
+// they're unit-testable in isolation from test.js. Only main() exits.
+
+function yamlQuote(str) {
+  // Wraps a value as a double-quoted YAML scalar and escapes backslashes and
+  // double quotes, so a colon or quote inside the value can never be
+  // misread as a new key or terminate the string early.
+  return '"' + String(str).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+}
 
 function parseSource(rawInput) {
   // Strip a UTF-8 BOM if present. Notepad and some Windows tooling default to
@@ -68,21 +77,46 @@ function parseSource(rawInput) {
   return { fm, blocks };
 }
 
-function renderCursor(fm, blocks) {
+// Cursor has real activation modes (verified against current docs): Always
+// Apply (alwaysApply: true) loads on every single request and should stay
+// small; Agent Requested (alwaysApply: false, no globs, description as a
+// semantic signal) lets the model pull the rule in only when relevant. Phase
+// 3 (REVIEW) is already designed to be invoked standalone/on demand, so it
+// maps directly onto Agent Requested instead of paying its token cost on
+// every request. BRAINSTORM + PONYTAIL apply to every coding task, so they
+// stay Always Apply -- full detail preserved, nothing trimmed; the fix here
+// is *which file loads by default*, not shrinking the text.
+
+function renderCursorCore(blocks) {
+  const description = yamlQuote(
+    "Design-first gate before building features, plus lazy/minimal-diff implementation discipline (architecture and token discipline included). Always applies."
+  );
   return `---
-description: ${fm.description}
-globs: ["**/*"]
+description: ${description}
 alwaysApply: true
 ---
-# Dean (Cursor)
+# Dean — Core (Cursor, Always Apply)
 
 Note: Cursor cannot hard-block tool calls. The gate below is a strong directive,
 not a technical guarantee — treat "do not implement before approval" as binding
-even though nothing here can force it.
+prompt pressure the model is expected to follow, not something this file can
+enforce mechanically.
 
 ${blocks.BRAINSTORM}
 
 ${blocks.PONYTAIL}
+`;
+}
+
+function renderCursorReview(blocks) {
+  const description = yamlQuote(
+    "Strict code review: security (XSS/SQLi/secrets/authz), resource use (N+1, sprawl, god objects), business-logic risk, and code-review-reception discipline. Use when reviewing a diff, PR, or file — does not require the design or implementation phases to have run first."
+  );
+  return `---
+description: ${description}
+alwaysApply: false
+---
+# Dean — Review (Cursor, Agent Requested)
 
 ${blocks.REVIEW}
 
@@ -90,10 +124,13 @@ ${blocks.REVIEW_STANDALONE_NOTE}
 `;
 }
 
-function renderClaudeSkill(fm, blocks) {
+function renderClaudeSkill(blocks) {
+  const description = yamlQuote(
+    "Use before creating features, building components, or modifying behavior (design-first gate + lazy implementation); also use standalone whenever reviewing code for resource use, security, or business-logic risk."
+  );
   return `---
 name: dean
-description: Use before creating features, building components, or modifying behavior (design-first gate + lazy implementation); also use standalone whenever reviewing code for resource use, security, or business-logic risk.
+description: ${description}
 ---
 # Dean
 
@@ -120,30 +157,35 @@ function validateOutput(label, content) {
 }
 
 function build(rawSource) {
-  const { fm, blocks } = parseSource(rawSource);
-  const cursorContent = renderCursor(fm, blocks);
-  const claudeContent = renderClaudeSkill(fm, blocks);
-  return { cursorContent, claudeContent };
+  const { blocks } = parseSource(rawSource);
+  return {
+    cursorCoreContent: renderCursorCore(blocks),
+    cursorReviewContent: renderCursorReview(blocks),
+    claudeContent: renderClaudeSkill(blocks),
+  };
 }
 
 function main() {
   const check = process.argv.includes("--check");
   try {
     const raw = fs.readFileSync(SRC, "utf8");
-    const { cursorContent, claudeContent } = build(raw);
+    const { cursorCoreContent, cursorReviewContent, claudeContent } = build(raw);
 
     if (check) {
-      validateOutput("cursor", cursorContent);
+      validateOutput("cursor-core", cursorCoreContent);
+      validateOutput("cursor-review", cursorReviewContent);
       validateOutput("claude", claudeContent);
       console.log("check: OK");
       return;
     }
 
-    fs.mkdirSync(path.dirname(CURSOR_OUT), { recursive: true });
+    fs.mkdirSync(path.dirname(CURSOR_CORE_OUT), { recursive: true });
     fs.mkdirSync(path.dirname(CLAUDE_OUT), { recursive: true });
-    fs.writeFileSync(CURSOR_OUT, cursorContent);
+    fs.writeFileSync(CURSOR_CORE_OUT, cursorCoreContent);
+    fs.writeFileSync(CURSOR_REVIEW_OUT, cursorReviewContent);
     fs.writeFileSync(CLAUDE_OUT, claudeContent);
-    console.log("wrote " + CURSOR_OUT);
+    console.log("wrote " + CURSOR_CORE_OUT);
+    console.log("wrote " + CURSOR_REVIEW_OUT);
     console.log("wrote " + CLAUDE_OUT);
   } catch (err) {
     console.error("Dean: " + err.message);
@@ -151,6 +193,17 @@ function main() {
   }
 }
 
-module.exports = { parseSource, renderCursor, renderClaudeSkill, validateOutput, build };
+module.exports = {
+  parseSource,
+  renderCursorCore,
+  renderCursorReview,
+  renderClaudeSkill,
+  validateOutput,
+  build,
+  yamlQuote,
+  CURSOR_CORE_OUT,
+  CURSOR_REVIEW_OUT,
+  CLAUDE_OUT,
+};
 
 if (require.main === module) main();
